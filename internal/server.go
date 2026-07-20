@@ -222,7 +222,7 @@ func (s *PromptServer) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 // noopResponseGetter is a fallback ResponseGetter used when no real OpenAI-backed
-// getter is injected. It keeps buildRouter usable without external configuration.
+// getter is injected. It keeps BuildRouter usable without external configuration.
 //
 // MIGRATION_NOTE: The original code hard-coded "YOUR_CHATGPT_API_KEY_HERE". A real
 // deployment should construct a client.Client (internal/client.go) and pass it to
@@ -234,9 +234,14 @@ func (noopResponseGetter) GetResponse(_ context.Context, _ string) (string, erro
 	return "", errors.New("response getter not configured")
 }
 
-// buildRouter constructs the fully-wired HTTP handler for the application.
+// BuildRouter constructs the fully-wired HTTP handler for the application.
 //
-// This exact name and signature are required by cmd/server/main.go.
+// This exported wrapper is required by cmd/server/main.go.
+func BuildRouter() http.Handler {
+	return buildRouter()
+}
+
+// buildRouter constructs the fully-wired HTTP handler for the application.
 func buildRouter() http.Handler {
 	server := NewPromptServer(noopResponseGetter{})
 	return buildRouterWith(server)
