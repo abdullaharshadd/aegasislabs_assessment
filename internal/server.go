@@ -218,8 +218,8 @@ func (s *PromptServer) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 type noopResponseGetter struct{}
 
 // GetResponse returns an error indicating the getter is not configured.
-func (n noopResponseGetter) GetResponse(ctx context.Context, prompt string) (string, error) {
-	return "", fmt.Errorf("no ResponseGetter configured")
+func (n noopResponseGetter) GetResponse(_ context.Context, _ string) (string, error) {
+	return "", errors.New("no response getter configured")
 }
 
 // BuildRouter constructs the fully-wired HTTP handler for the application.
