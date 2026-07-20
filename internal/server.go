@@ -219,7 +219,7 @@ type noopResponseGetter struct{}
 
 // GetResponse returns an error indicating the getter is not configured.
 func (n noopResponseGetter) GetResponse(_ context.Context, _ string) (string, error) {
-	return "", fmt.Errorf("no ResponseGetter configured: set OPENAI_API_KEY and inject a real client")
+	return "", fmt.Errorf("no response getter configured")
 }
 
 // BuildRouter constructs the fully-wired HTTP handler for the application.
