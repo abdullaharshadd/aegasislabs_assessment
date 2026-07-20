@@ -219,7 +219,7 @@ type noopResponseGetter struct{}
 
 // GetResponse returns an error indicating the getter is not configured.
 func (n noopResponseGetter) GetResponse(_ context.Context, _ string) (string, error) {
-	return "", errors.New("no response getter configured")
+	return "", fmt.Errorf("no ResponseGetter configured")
 }
 
 // BuildRouter constructs the fully-wired HTTP handler for the application.
