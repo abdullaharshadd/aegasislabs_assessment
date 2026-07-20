@@ -1,15 +1,3 @@
-// Package internal implements the HTTP server for the prompt CRUD REST API.
-//
-// MIGRATION_NOTE: The original main.py was a Flask application that wrapped the
-// OpenAI Completion API. It defined an in-memory ChatGPTBotAPI service (a global
-// singleton) storing prompts in a slice, plus four routes for CRUD operations.
-//
-// The migrated design:
-//   - The in-memory prompt store is modeled by the concurrency-safe promptStore type.
-//   - The OpenAI Completion call is delegated to the already-migrated client.Client
-//     (see internal/client.go) via its GetResponse method, so we do not re-implement
-//     the OpenAI HTTP call here.
-//   - Routes are wired with chi in buildRouter, which cmd/server/main.go invokes.
 package internal
 
 import (
@@ -230,8 +218,8 @@ func (s *PromptServer) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 type noopResponseGetter struct{}
 
 // GetResponse returns an error indicating the getter is not configured.
-func (noopResponseGetter) GetResponse(_ context.Context, _ string) (string, error) {
-	return "", errors.New("response getter not configured")
+func (n noopResponseGetter) GetResponse(ctx context.Context, prompt string) (string, error) {
+	return "", fmt.Errorf("no ResponseGetter configured")
 }
 
 // BuildRouter constructs the fully-wired HTTP handler for the application.
