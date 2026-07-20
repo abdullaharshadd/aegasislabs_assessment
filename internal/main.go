@@ -52,8 +52,8 @@ type Completer interface {
 // endpoint. The exact request/response wire format may require manual review
 // against the current OpenAI API version.
 type OpenAICompleter struct {
-	apiKey string
-	engine string
+	apiKey    string
+	engine    string
 	maxTokens int
 }
 
@@ -61,8 +61,8 @@ type OpenAICompleter struct {
 // OPENAI_API_KEY environment variable.
 func NewOpenAICompleter() *OpenAICompleter {
 	return &OpenAICompleter{
-		apiKey: os.Getenv("OPENAI_API_KEY"),
-		engine: "text-davinci-002",
+		apiKey:    os.Getenv("OPENAI_API_KEY"),
+		engine:    "text-davinci-002",
 		maxTokens: 150,
 	}
 }
@@ -90,8 +90,8 @@ func (c *OpenAICompleter) Complete(ctx context.Context, prompt string) (string, 
 // default config, but Go's HTTP server serves requests concurrently, so a mutex
 // is required to avoid data races.
 type PromptStore struct {
-	mu sync.RWMutex
-	prompts []string
+	mu        sync.RWMutex
+	prompts   []string
 	completer Completer
 }
 
@@ -267,4 +267,10 @@ func buildRouter() http.Handler {
 	r.Put("/update/{prompt_index}", h.Update)
 
 	return r
+}
+
+// BuildRouter is the exported entry point for constructing the HTTP router.
+// It is called by cmd/server/main.go.
+func BuildRouter() http.Handler {
+	return buildRouter()
 }
