@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	internal "migrated-app/internal"
 )
 
 func buildRouter() http.Handler {
-	mux := http.NewServeMux()
-	return mux
+	return internal.BuildRouter()
 }
 
 func main() {
