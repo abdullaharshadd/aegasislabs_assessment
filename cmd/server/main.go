@@ -9,11 +9,17 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"migrated-app/internal/handler"
 )
 
+// buildRouter wires the migrated handler package's routes into an http.Handler.
 func buildRouter() http.Handler {
-	mux := http.NewServeMux()
-	return mux
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		log.Fatal().Msg("OPENAI_API_KEY environment variable is required")
+	}
+	return handler.NewFromEnv(apiKey).Routes()
 }
 
 func main() {
