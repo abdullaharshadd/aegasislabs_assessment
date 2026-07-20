@@ -1,20 +1,3 @@
-// Package handler provides an HTTP REST API for managing text prompts and generating
-// responses via the OpenAI Completion API.
-//
-// MIGRATION_NOTE: The Python source (main.py) is a Flask server. This Go migration
-// uses net/http with Go 1.22+ method-based path patterns in the standard library
-// ServeMux, avoiding external dependencies for routing.
-//
-// MIGRATION_NOTE: In the Python source, prompts were stored in an in-memory singleton
-// (ChatGPTBotAPI). Here, the equivalent state is encapsulated in a PromptStore struct
-// that is safe for concurrent access (Flask's dev server is single-threaded by default,
-// but Go's net/http serves requests concurrently, so a mutex is mandatory).
-//
-// MIGRATION_NOTE: The OpenAI API key was hardcoded in Python. It is externalized here to
-// the OPENAI_API_KEY environment variable. The legacy openai.Completion.create call
-// (openai<1.0 SDK) is reimplemented as a direct HTTP call to the completions endpoint,
-// since there is no official Go SDK matching that legacy behavior. Review the model name
-// ("text-davinci-002") — it is deprecated by OpenAI and may need updating.
 package handler
 
 import (
