@@ -24,10 +24,6 @@ type LLMClient interface {
 }
 
 // PromptStore stores user-provided prompts in memory in a concurrency-safe way.
-//
-// MIGRATION_NOTE: This replaces the ChatGPTBotAPI.prompts list from the Python
-// source. Deletion preserves the positional-index semantics of the original
-// (Python's `del self.prompts[i]`).
 type PromptStore struct {
 	mu      sync.RWMutex
 	prompts []string
@@ -57,8 +53,7 @@ func (s *PromptStore) Get(index int) (string, error) {
 	return s.prompts[index], nil
 }
 
-// Update replaces the prompt at the given index. It returns
-// ErrInvalidPromptIndex if the index is out of range.
+// Update replaces the prompt at the given index.
 func (s *PromptStore) Update(index int, newPrompt string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -69,8 +64,7 @@ func (s *PromptStore) Update(index int, newPrompt string) error {
 	return nil
 }
 
-// Delete removes the prompt at the given index. It returns
-// ErrInvalidPromptIndex if the index is out of range.
+// Delete removes the prompt at the given index.
 func (s *PromptStore) Delete(index int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -82,9 +76,6 @@ func (s *PromptStore) Delete(index int) error {
 }
 
 // stubLLMClient is a placeholder LLMClient used when no real client is injected.
-//
-// MIGRATION_NOTE: Replace this with a real OpenAI-backed implementation. The
-// original used engine "text-davinci-002" with max_tokens=150.
 type stubLLMClient struct{}
 
 // Complete echoes back a canned completion for the supplied prompt.
@@ -98,8 +89,7 @@ type PromptHandler struct {
 	llm   LLMClient
 }
 
-// NewPromptHandler constructs a PromptHandler with the given dependencies. If
-// llm is nil, a stub client is used.
+// NewPromptHandler constructs a PromptHandler with the given dependencies.
 func NewPromptHandler(store *PromptStore, llm LLMClient) *PromptHandler {
 	if store == nil {
 		store = NewPromptStore()
@@ -156,10 +146,6 @@ func (h *PromptHandler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
 func (h *PromptHandler) GetResponse(w http.ResponseWriter, r *http.Request) {
 	idx, err := parseIndex(r)
 	if err != nil {
-		// MIGRATION_NOTE: Flask's <int:...> converter 404s on non-integer
-		// input; here we return the original "Invalid prompt index" message
-		// with a 200 to match the Python response shape for out-of-range
-		// values.
 		writeJSON(w, http.StatusOK, map[string]string{"response": "Invalid prompt index"})
 		return
 	}
@@ -217,15 +203,9 @@ func (h *PromptHandler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Prompt updated successfully"})
 }
 
-// BuildRouter constructs the fully-wired HTTP router for the application. It is
-// called directly by cmd/server/main.go.
+// BuildRouter constructs the fully-wired HTTP router for the application.
 func BuildRouter() http.Handler {
 	store := NewPromptStore()
-
-	// MIGRATION_NOTE: A stub LLM client is injected here. Replace with a real
-	// OpenAI-backed implementation and source the API key from configuration
-	// (the original hard-coded "YOUR_CHATGPT_API_KEY_HERE", which must not be
-	// committed).
 	handler := NewPromptHandler(store, stubLLMClient{})
 
 	r := chi.NewRouter()
