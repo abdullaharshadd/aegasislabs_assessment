@@ -1,25 +1,3 @@
-// Package internal implements the ChatGPT prompt management REST API.
-//
-// MIGRATION_NOTE: The original source was a Flask application (main.py) that
-// stored a list of text prompts in memory and forwarded them to the OpenAI
-// Completion API. It has been ported to idiomatic Go using the chi router with
-// dependency injection for the prompt store, the LLM client, and the HTTP
-// handlers. The verb-in-path URL contract is preserved exactly:
-//   POST   /create
-//   GET    /get/{prompt_index}
-//   PUT    /update/{prompt_index}
-//   DELETE /delete/{prompt_index}
-//
-// MIGRATION_NOTE: The Python code mutated a module-level singleton without any
-// synchronization. Flask's default dev server is single-threaded, but Go's
-// net/http serves each request in its own goroutine, so the in-memory store is
-// guarded with a sync.RWMutex to remain race-free.
-//
-// MIGRATION_NOTE: The original called openai.Completion.create directly. That
-// concern is abstracted behind the LLMClient interface so the OpenAI
-// integration can be injected (and mocked in tests). A stub implementation is
-// provided; wiring a real OpenAI client requires manual review of the API key
-// configuration and the desired SDK.
 package internal
 
 import (
@@ -239,9 +217,9 @@ func (h *PromptHandler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Prompt updated successfully"})
 }
 
-// buildRouter constructs the fully-wired HTTP router for the application. It is
+// BuildRouter constructs the fully-wired HTTP router for the application. It is
 // called directly by cmd/server/main.go.
-func buildRouter() http.Handler {
+func BuildRouter() http.Handler {
 	store := NewPromptStore()
 
 	// MIGRATION_NOTE: A stub LLM client is injected here. Replace with a real
