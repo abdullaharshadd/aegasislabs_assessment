@@ -280,3 +280,9 @@ func buildRouter() http.Handler {
 
 	return r
 }
+
+// Run starts the HTTP server on the given address.
+func Run(addr string) error {
+	router := buildRouter()
+	return http.ListenAndServe(addr, router)
+}
