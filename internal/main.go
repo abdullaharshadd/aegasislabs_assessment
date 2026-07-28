@@ -281,3 +281,9 @@ func buildRouter() http.Handler {
 
 	return r
 }
+
+// BuildRouter is an exported wrapper around buildRouter so that cmd/server/main.go
+// can call it from outside the internal package.
+func BuildRouter() http.Handler {
+	return buildRouter()
+}
