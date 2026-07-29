@@ -22,20 +22,25 @@ func main() {
 		Handler: client.BuildRouter(),
 	}
 
+	serverErr := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("server error")
+			serverErr <- err
 		}
 	}()
 
 	log.Info().Msg("server started on :8080")
-	<-ctx.Done()
+
+	select {
+	case err := <-serverErr:
+		log.Fatal().Err(err).Msg("server error")
+	case <-ctx.Done():
+	}
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutCtx); err != nil {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
-
-	_ = os.Stderr
+	os.Exit(0)
 }
