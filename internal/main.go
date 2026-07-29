@@ -153,7 +153,7 @@ func (h *PromptHandler) UpdatePromptHandler(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]string{"message": msgUpdated})
 }
 
-func BuildRouter() http.Handler {
+func buildRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -171,4 +171,10 @@ func BuildRouter() http.Handler {
 	r.Put("/update/{prompt_index}", h.UpdatePromptHandler)
 
 	return r
+}
+
+// BuildRouter is the exported entry point for constructing the HTTP router.
+// It is called by cmd/server/main.go.
+func BuildRouter() http.Handler {
+	return buildRouter()
 }
