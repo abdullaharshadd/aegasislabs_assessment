@@ -248,6 +248,3 @@ func buildRouter() http.Handler {
 func BuildRouter() http.Handler {
 	return buildRouter()
 }
-
-// ensure writeText is used (it is used above, but keep compiler happy)
-var _ = writeText
