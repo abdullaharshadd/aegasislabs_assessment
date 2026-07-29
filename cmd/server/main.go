@@ -37,7 +37,5 @@ func main() {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
 
-	// Keep process alive briefly to allow graceful shutdown to complete
-	time.Sleep(100 * time.Millisecond)
-	os.Exit(0)
+	_ = os.Stderr
 }
