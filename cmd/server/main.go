@@ -10,18 +10,28 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	client "migrated-app/internal"
+	"migrated-app/internal/config"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	router := client.BuildRouter()
+	_, err := config.Load()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to load config")
+		os.Exit(1)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 
 	srv := &http.Server{
 		Addr:         ":8080",
-		Handler:      router,
+		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
