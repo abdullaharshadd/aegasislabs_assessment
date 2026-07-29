@@ -14,9 +14,6 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	srv := &http.Server{
 		Addr:    ":8080",
 		Handler: client.BuildRouter(),
@@ -29,13 +26,14 @@ func main() {
 	}()
 
 	log.Info().Msg("server started on :8080")
-	<-ctx.Done()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutCtx); err != nil {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
-
-	log.Info().Str("stderr", os.Stderr.Name()).Msg("shutdown complete")
 }
