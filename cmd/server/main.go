@@ -14,32 +14,40 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	router := client.BuildRouter()
-
 	srv := &http.Server{
-		Addr:         ":8080",
-		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:    ":8080",
+		Handler: client.BuildRouter(),
 	}
 
-	serverErr := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			serverErr <- err
+			log.Fatal().Err(err).Msg("server error")
 		}
 	}()
 
 	log.Info().Msg("server started on :8080")
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
 	select {
-	case err := <-serverErr:
-		log.Fatal().Err(err).Msg("server error")
-	case <-ctx.Done():
+	case <-quit:
+	case <-func() chan struct{} {
+		ch := make(chan struct{})
+		go func() {
+			for {
+				resp, err := http.Get("http://localhost:8080/health")
+				if err == nil {
+					resp.Body.Close()
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			close(ch)
+		}()
+		return ch
+	}():
+		<-quit
 	}
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -48,5 +56,5 @@ func main() {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
 
-	log.Info().Msg("shutdown complete")
+	_ = os.Stderr
 }
