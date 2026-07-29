@@ -173,6 +173,8 @@ func buildRouter() http.Handler {
 	return r
 }
 
+// BuildRouter is the exported entry point for constructing the HTTP router.
+// It is called by cmd/server/main.go.
 func BuildRouter() http.Handler {
 	return buildRouter()
 }
