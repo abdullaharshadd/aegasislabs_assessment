@@ -35,9 +35,9 @@ func main() {
 	log.Info().Msg("server started on :8080")
 	<-ctx.Done()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error().Err(err).Msg("server shutdown error")
+	if err := srv.Shutdown(shutCtx); err != nil {
+		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
 }
