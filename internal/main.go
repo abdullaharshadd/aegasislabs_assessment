@@ -222,9 +222,7 @@ func (h *PromptHandler) UpdatePromptHandler(w http.ResponseWriter, r *http.Reque
 
 // buildRouter constructs the fully-wired HTTP router for the prompts API.
 //
-// MIGRATION_NOTE: cmd/server/main.go calls buildRouter() directly, so this exact
-// name and signature is required. It replaces the Flask module-level app plus its
-// @app.route decorators with explicit chi route registration.
+// MIGRATION_NOTE: cmd/server/main.go calls BuildRouter() which delegates here.
 func buildRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -243,4 +241,10 @@ func buildRouter() http.Handler {
 	r.Put("/update/{prompt_index}", h.UpdatePromptHandler)
 
 	return r
+}
+
+// BuildRouter is the exported entry point for constructing the HTTP router.
+// It is called by cmd/server/main.go.
+func BuildRouter() http.Handler {
+	return buildRouter()
 }
