@@ -40,8 +40,6 @@ func (c *ChatGPTBotAPI) GetResponse(promptIndex int) string {
 	if promptIndex < 0 || promptIndex >= len(c.prompts) {
 		return "Invalid prompt index"
 	}
-	// MIGRATION_NOTE: The legacy openai.Completion.create with engine 'text-davinci-002'
-	// has been deprecated. Implement with current OpenAI API client as needed.
 	prompt := c.prompts[promptIndex]
 	_ = prompt
 	return "MIGRATION_NOTE: OpenAI completion not implemented - please integrate current OpenAI Go SDK"
