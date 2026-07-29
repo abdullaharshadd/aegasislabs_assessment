@@ -122,7 +122,7 @@ func writeText(w http.ResponseWriter, status int, body string) {
 }
 
 // writeJSON writes a JSON response body with the given status code.
-func writeJSON(w http.ResponseWriter, status int, payload any) {
+func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
