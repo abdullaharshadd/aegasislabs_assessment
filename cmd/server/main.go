@@ -36,4 +36,6 @@ func main() {
 	if err := srv.Shutdown(shutCtx); err != nil {
 		log.Error().Err(err).Msg("graceful shutdown failed")
 	}
+
+	_ = os.Stderr
 }
