@@ -37,10 +37,10 @@ type completionCreator interface {
 // ChatGPTBotAPI class, but is concurrency-safe since Go HTTP handlers run in
 // separate goroutines.
 type ChatGPTBotStore struct {
-	mu       sync.RWMutex
-	prompts  []string
-	client   completionCreator
-	apiKey   string
+	mu      sync.RWMutex
+	prompts []string
+	client  completionCreator
+	apiKey  string
 }
 
 // NewChatGPTBotStore constructs a ChatGPTBotStore.
@@ -268,8 +268,7 @@ func coercePrompt(v any) (string, bool) {
 	return s, true
 }
 
-// buildRouter constructs the fully-wired HTTP router for the prompt API. It is
-// called directly by cmd/server/main.go.
+// buildRouter constructs the fully-wired HTTP router for the prompt API.
 func buildRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -289,4 +288,9 @@ func buildRouter() http.Handler {
 	r.Put("/update/{prompt_index}", h.UpdatePromptHandler)
 
 	return r
+}
+
+// BuildRouter is the exported wrapper around buildRouter, used by cmd/server/main.go.
+func BuildRouter() http.Handler {
+	return buildRouter()
 }
