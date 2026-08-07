@@ -252,6 +252,12 @@ func (noopCompleter) Complete(string) (string, error) {
 // It is called directly by cmd/server/main.go and must keep this exact name
 // and signature.
 func buildRouter() http.Handler {
+	return BuildRouter()
+}
+
+// BuildRouter constructs and returns the fully-wired chi router for the prompt
+// API. It is exported so that cmd/server/main.go can call it directly.
+func BuildRouter() http.Handler {
 	store := NewPromptStore(noopCompleter{})
 	handlers := NewPromptHandlers(store)
 
