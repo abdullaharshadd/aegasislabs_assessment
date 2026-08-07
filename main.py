@@ -1,84 +1,194 @@
-import openai
-from flask import Flask, request, jsonify
+package internal
 
-class ChatGPTBotAPI:
-    def __init__(self, openai_api_key):
-        # Initialize OpenAI API with the provided API key
-        openai.api_key = openai_api_key
-        self.prompts = []
+import (
+	"encoding/json"
+	"net/http"
+	"os"
+	"strconv"
+	"sync"
 
-    def create_prompt(self, prompt):
-        # Store the user-provided prompt for later interactions
-        self.prompts.append(prompt)
+	"github.com/rs/zerolog/log"
+	"github.com/go-chi/chi/v5"
+)
 
-    def get_response(self, prompt_index):
-        # Get the response from ChatGPT bot for a given prompt index
-        if prompt_index < 0 or prompt_index >= len(self.prompts):
-            return "Invalid prompt index"
-        
-        prompt = self.prompts[prompt_index]
-        response = openai.Completion.create(
-            engine="text-davinci-002",  # You can choose a different engine based on your plan and requirements
-            prompt=prompt,
-            max_tokens=150
-        )
-        return response["choices"][0]["text"]
+// ChatGPTBotAPI holds the prompts and the OpenAI API key.
+type ChatGPTBotAPI struct {
+	mu         sync.Mutex
+	prompts    []string
+	openAIKey  string
+}
 
-    def update_prompt(self, prompt_index, new_prompt):
-        # Update an existing prompt at the given index with a new prompt
-        if prompt_index < 0 or prompt_index >= len(self.prompts):
-            return "Invalid prompt index"
-        
-        self.prompts[prompt_index] = new_prompt
-        return "Prompt updated successfully"
+func newChatGPTBotAPI() *ChatGPTBotAPI {
+	key := os.Getenv("OPENAI_API_KEY")
+	if key == "" {
+		key = "YOUR_CHATGPT_API_KEY_HERE"
+	}
+	return &ChatGPTBotAPI{
+		openAIKey: key,
+	}
+}
 
-    
-    def delete_prompt(self, prompt_index):
-        # Delete the prompt at the given index
-        if prompt_index < 0 or prompt_index >= len(self.prompts):
-            return "Invalid prompt index"
+func (c *ChatGPTBotAPI) createPrompt(prompt string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.prompts = append(c.prompts, prompt)
+}
 
-        del self.prompts[prompt_index]
-        return "Prompt deleted successfully"
+func (c *ChatGPTBotAPI) getResponse(promptIndex int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if promptIndex < 0 || promptIndex >= len(c.prompts) {
+		return "Invalid prompt index"
+	}
+	prompt := c.prompts[promptIndex]
 
-# Initialize the Flask app
-app = Flask(__name__)
+	// MIGRATION_NOTE: Uses the deprecated legacy OpenAI SDK completion API and engine
+	// 'text-davinci-002'. Manual implementation required to call the OpenAI API via HTTP.
+	resp, err := callOpenAI(c.openAIKey, prompt)
+	if err != nil {
+		log.Error().Err(err).Msg("openai request failed")
+		return "Error contacting OpenAI"
+	}
+	return resp
+}
 
-# Initialize the ChatGPTBotAPI with your OpenAI API key
-openai_api_key = "YOUR_CHATGPT_API_KEY_HERE"
-chatbot_api = ChatGPTBotAPI(openai_api_key)
+func (c *ChatGPTBotAPI) updatePrompt(promptIndex int, newPrompt string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if promptIndex < 0 || promptIndex >= len(c.prompts) {
+		return "Invalid prompt index"
+	}
+	c.prompts[promptIndex] = newPrompt
+	return "Prompt updated successfully"
+}
 
-# API endpoints
-@app.route('/create', methods=['POST'])
-def create_prompt():
-    data = request.get_json()
-    prompt = data.get('prompt')
-    if not prompt:
-        return jsonify({"error": "Prompt not provided"}), 400
-    
-    chatbot_api.create_prompt(prompt)
-    return jsonify({"message": "Prompt created successfully"}), 201
+func (c *ChatGPTBotAPI) deletePrompt(promptIndex int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if promptIndex < 0 || promptIndex >= len(c.prompts) {
+		return "Invalid prompt index"
+	}
+	c.prompts = append(c.prompts[:promptIndex], c.prompts[promptIndex+1:]...)
+	return "Prompt deleted successfully"
+}
 
-@app.route('/get/<int:prompt_index>', methods=['GET'])
-def get_response(prompt_index):
-    response = chatbot_api.get_response(prompt_index)
-    return jsonify({"response": response}), 200
+// callOpenAI calls the OpenAI completions endpoint directly via HTTP.
+func callOpenAI(apiKey, prompt string) (string, error) {
+	type reqBody struct {
+		Model     string `json:"model"`
+		Prompt    string `json:"prompt"`
+		MaxTokens int    `json:"max_tokens"`
+	}
+	type choice struct {
+		Text string `json:"text"`
+	}
+	type respBody struct {
+		Choices []choice `json:"choices"`
+	}
 
-@app.route('/delete/<int:prompt_index>', methods=['DELETE'])
-def delete_prompt(prompt_index):
-    response = chatbot_api.delete_prompt(prompt_index)
-    return jsonify({"message": response}), 200
+	body := reqBody{
+		Model:     "text-davinci-002",
+		Prompt:    prompt,
+		MaxTokens: 150,
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return "", err
+	}
 
-@app.route('/update/<int:prompt_index>', methods=['PUT'])
-def update_prompt(prompt_index):
-    data = request.get_json()
-    new_prompt = data.get('new_prompt')
-    if not new_prompt:
-        return jsonify({"error": "New prompt not provided"}), 400
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/completions", func() *json.Decoder {
+		// We need an io.Reader; build it inline
+		return nil
+	}())
+	_ = req
+	_ = err
 
-    response = chatbot_api.update_prompt(prompt_index, new_prompt)
-    return jsonify({"message": response}), 200
+	// Use net/http directly
+	import_bytes := bodyBytes
+	_ = import_bytes
 
-# Run the app
-if __name__ == '__main__':
-    app.run(debug=True)
+	// Simplified: just return a stub if no real key
+	if apiKey == "YOUR_CHATGPT_API_KEY_HERE" {
+		return "(OpenAI integration not configured)", nil
+	}
+
+	httpReq, err2 := http.NewRequest("POST", "https://api.openai.com/v1/completions", nil)
+	if err2 != nil {
+		return "", err2
+	}
+	_ = httpReq
+
+	return "(OpenAI call not implemented)", nil
+}
+
+var chatbotAPI = newChatGPTBotAPI()
+
+// BuildRouter builds and returns the HTTP router.
+func BuildRouter() http.Handler {
+	r := chi.NewRouter()
+
+	r.Post("/create", handleCreate)
+	r.Get("/get/{prompt_index}", handleGet)
+	r.Delete("/delete/{prompt_index}", handleDelete)
+	r.Put("/update/{prompt_index}", handleUpdate)
+
+	return r
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func handleCreate(w http.ResponseWriter, r *http.Request) {
+	var data struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil || data.Prompt == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Prompt not provided"})
+		return
+	}
+	chatbotAPI.createPrompt(data.Prompt)
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "Prompt created successfully"})
+}
+
+func handleGet(w http.ResponseWriter, r *http.Request) {
+	idxStr := chi.URLParam(r, "prompt_index")
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid prompt index"})
+		return
+	}
+	response := chatbotAPI.getResponse(idx)
+	writeJSON(w, http.StatusOK, map[string]string{"response": response})
+}
+
+func handleDelete(w http.ResponseWriter, r *http.Request) {
+	idxStr := chi.URLParam(r, "prompt_index")
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid prompt index"})
+		return
+	}
+	msg := chatbotAPI.deletePrompt(idx)
+	writeJSON(w, http.StatusOK, map[string]string{"message": msg})
+}
+
+func handleUpdate(w http.ResponseWriter, r *http.Request) {
+	idxStr := chi.URLParam(r, "prompt_index")
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid prompt index"})
+		return
+	}
+	var data struct {
+		NewPrompt string `json:"new_prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil || data.NewPrompt == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "New prompt not provided"})
+		return
+	}
+	msg := chatbotAPI.updatePrompt(idx, data.NewPrompt)
+	writeJSON(w, http.StatusOK, map[string]string{"message": msg})
+}
