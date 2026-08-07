@@ -95,7 +95,7 @@ func (s *promptStore) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ok := s.get(index)
+	prompt, ok := s.get(index)
 	if !ok {
 		writeJSON(w, http.StatusOK, map[string]string{"response": "Invalid prompt index"})
 		return
@@ -107,12 +107,12 @@ func (s *promptStore) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := NewClient()
-	apiResp, err := client.GetResponse(r.Context(), index)
+	apiResp, err := client.GetResponse(r.Context(), prompt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"response": apiResp.Response})
+	writeJSON(w, http.StatusOK, map[string]string{"response": apiResp})
 }
 
 func (s *promptStore) handleUpdate(w http.ResponseWriter, r *http.Request) {
