@@ -1,8 +1,4 @@
-// Package client provides a small HTTP client for the prompts REST API.
-//
-// It mirrors the behaviour of the original standalone Python client that
-// exercised the create/read/update/delete endpoints of a running API server.
-package client
+package internal
 
 import (
 	"bytes"
@@ -13,85 +9,57 @@ import (
 	"net/http"
 )
 
-// DefaultBaseURL is the base URL of the target API server.
-//
-// MIGRATION_NOTE: The original Python module used a package-level BASE_URL
-// constant ("http://127.0.0.1:5000"). In Go this is exposed as a configurable
-// field on Client with this default; replace it with the address of your
-// running API server.
+// DefaultBaseURL is the base URL of the running prompt API server.
+// Replace this with the base URL of your running API server.
 const DefaultBaseURL = "http://127.0.0.1:5000"
 
-// Client is an HTTP client for the prompts REST API.
+// errInvalidResponse mirrors the Python client's fallback body returned when the
+// server response cannot be decoded as JSON.
+//
+// MIGRATION_NOTE: The Python client returned {"error": "Invalid response from
+// the server"} on a JSONDecodeError. Here we return the same map so callers
+// observe identical behavior. The decision to fall back is body-content driven
+// (a failed JSON decode), not Content-Type header driven, matching the source.
+func errInvalidResponse() map[string]any {
+	return map[string]any{"error": "Invalid response from the server"}
+}
+
+// Client is an HTTP client for the prompt CRUD API.
 type Client struct {
 	baseURL string
 	http    *http.Client
 }
 
-// Option configures a Client.
-type Option func(*Client)
-
-// WithBaseURL overrides the API server base URL.
-func WithBaseURL(baseURL string) Option {
-	return func(c *Client) {
-		c.baseURL = baseURL
+// NewClient constructs a Client targeting the given base URL. If baseURL is
+// empty, DefaultBaseURL is used. If httpClient is nil, http.DefaultClient is used.
+func NewClient(baseURL string, httpClient *http.Client) *Client {
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
 	}
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	return &Client{baseURL: baseURL, http: httpClient}
 }
 
-// WithHTTPClient overrides the underlying *http.Client.
-func WithHTTPClient(hc *http.Client) Option {
-	return func(c *Client) {
-		if hc != nil {
-			c.http = hc
-		}
-	}
-}
-
-// NewClient constructs a Client. By default it targets DefaultBaseURL and uses
-// the default *http.Client.
-func NewClient(opts ...Option) *Client {
-	c := &Client{
-		baseURL: DefaultBaseURL,
-		http:    &http.Client{},
-	}
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c
-}
-
-// Response represents a decoded JSON response from the API server.
-//
-// MIGRATION_NOTE: The Python client returned whatever JSON shape the server
-// produced (an arbitrary dict). We model that faithfully as a generic map so
-// that no server field is silently dropped.
-type Response map[string]any
-
-// invalidResponse mirrors the Python fallback {"error": "Invalid response
-// from the server"} returned when the body cannot be decoded as JSON.
-func invalidResponse() Response {
-	return Response{"error": "Invalid response from the server"}
-}
-
-// doJSON issues an HTTP request with an optional JSON body and decodes the
-// JSON response. When fallbackOnDecodeError is true, a body that cannot be
-// decoded as JSON yields the invalidResponse fallback instead of an error,
-// matching the Python JSONDecodeError handling on GET and DELETE.
-//
-// MIGRATION_NOTE: The original fallback is body-content driven (a failed JSON
-// decode), not Content-Type header driven, so we do not inspect Content-Type.
-func (c *Client) doJSON(ctx context.Context, method, endpoint string, body any, fallbackOnDecodeError bool) (Response, error) {
-	var reader io.Reader
+// doJSON performs an HTTP request with an optional JSON body and decodes the
+// response body as a generic JSON object. It returns (nil, error) only on
+// transport-level or request-construction failures. When the response body
+// cannot be decoded as JSON it returns the invalid-response fallback map with a
+// nil error, matching the Python client's JSONDecodeError handling.
+func (c *Client) doJSON(ctx context.Context, method, endpoint string, body any) (map[string]any, error) {
+	var reqBody io.Reader
 	if body != nil {
-		payload, err := json.Marshal(body)
+		buf, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
+			return nil, fmt.Errorf("encoding request body: %w", err)
 		}
-		reader = bytes.NewReader(payload)
+		reqBody = bytes.NewReader(buf)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+endpoint, reader)
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+endpoint, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("build %s %s request: %w", method, endpoint, err)
+		return nil, fmt.Errorf("building request: %w", err)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -99,47 +67,103 @@ func (c *Client) doJSON(ctx context.Context, method, endpoint string, body any, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("execute %s %s: %w", method, endpoint, err)
+		return nil, fmt.Errorf("performing request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read %s %s response: %w", method, endpoint, err)
+		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	var out Response
-	if err := json.Unmarshal(data, &out); err != nil {
-		if fallbackOnDecodeError {
-			return invalidResponse(), nil
-		}
-		return nil, fmt.Errorf("decode %s %s response: %w", method, endpoint, err)
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		// Body-content driven fallback, matching the Python JSONDecodeError path.
+		return errInvalidResponse(), nil
 	}
 	return out, nil
 }
 
-// CreatePrompt sends a new prompt to the /create endpoint and returns the
-// server's JSON response.
-func (c *Client) CreatePrompt(ctx context.Context, prompt string) (Response, error) {
-	return c.doJSON(ctx, http.MethodPost, "/create", map[string]string{"prompt": prompt}, false)
+// CreatePrompt sends a POST /create request to store a new prompt and returns
+// the decoded JSON response.
+func (c *Client) CreatePrompt(ctx context.Context, prompt string) (map[string]any, error) {
+	return c.doJSON(ctx, http.MethodPost, "/create", map[string]any{"prompt": prompt})
 }
 
-// GetResponse fetches the prompt at the given index from the /get/{index}
-// endpoint. If the server body is not valid JSON, it returns the
-// invalidResponse fallback rather than an error.
-func (c *Client) GetResponse(ctx context.Context, promptIndex int) (Response, error) {
-	return c.doJSON(ctx, http.MethodGet, fmt.Sprintf("/get/%d", promptIndex), nil, true)
+// GetResponse sends a GET /get/{index} request and returns the decoded JSON
+// response. If the server returns a non-JSON body, the invalid-response
+// fallback is returned with a nil error.
+func (c *Client) GetResponse(ctx context.Context, promptIndex int) (map[string]any, error) {
+	return c.doJSON(ctx, http.MethodGet, fmt.Sprintf("/get/%d", promptIndex), nil)
 }
 
-// UpdatePrompt updates the prompt at the given index via the
-// /update/{index} endpoint and returns the server's JSON response.
-func (c *Client) UpdatePrompt(ctx context.Context, promptIndex int, newPrompt string) (Response, error) {
-	return c.doJSON(ctx, http.MethodPut, fmt.Sprintf("/update/%d", promptIndex), map[string]string{"new_prompt": newPrompt}, false)
+// UpdatePrompt sends a PUT /update/{index} request to replace an existing
+// prompt and returns the decoded JSON response.
+func (c *Client) UpdatePrompt(ctx context.Context, promptIndex int, newPrompt string) (map[string]any, error) {
+	return c.doJSON(ctx, http.MethodPut, fmt.Sprintf("/update/%d", promptIndex), map[string]any{"new_prompt": newPrompt})
 }
 
-// DeletePrompt deletes the prompt at the given index via the
-// /delete/{index} endpoint. If the server body is not valid JSON, it returns
-// the invalidResponse fallback rather than an error.
-func (c *Client) DeletePrompt(ctx context.Context, promptIndex int) (Response, error) {
-	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("/delete/%d", promptIndex), nil, true)
+// DeletePrompt sends a DELETE /delete/{index} request and returns the decoded
+// JSON response. If the server returns a non-JSON body, the invalid-response
+// fallback is returned with a nil error.
+func (c *Client) DeletePrompt(ctx context.Context, promptIndex int) (map[string]any, error) {
+	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("/delete/%d", promptIndex), nil)
+}
+
+// RunClientDemo exercises each CRUD operation against the API, mirroring the
+// Python script's main() routine. It prints each response to stdout and returns
+// the first transport-level error encountered, if any.
+//
+// MIGRATION_NOTE: The Python __main__ guard ran main() when executed as a
+// script. In Go, package internal cannot host an executable entrypoint;
+// RunClientDemo is exported so a cmd/ binary (or a test) can invoke it. Wire it
+// up from a cmd/<name>/main.go if a standalone demo binary is desired.
+func RunClientDemo(ctx context.Context, c *Client) error {
+	const (
+		prompt1 = "What is life?"
+		prompt2 = "What is the capital of Pakistan?"
+	)
+
+	createResponse1, err := c.CreatePrompt(ctx, prompt1)
+	if err != nil {
+		return fmt.Errorf("create prompt 1: %w", err)
+	}
+	createResponse2, err := c.CreatePrompt(ctx, prompt2)
+	if err != nil {
+		return fmt.Errorf("create prompt 2: %w", err)
+	}
+	fmt.Println(createResponse1)
+	fmt.Println(createResponse2)
+
+	response, err := c.GetResponse(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("get response index 0: %w", err)
+	}
+	fmt.Println(response)
+
+	updateResponse, err := c.UpdatePrompt(ctx, 1, "Who is Goku?")
+	if err != nil {
+		return fmt.Errorf("update prompt index 1: %w", err)
+	}
+	fmt.Println(updateResponse)
+
+	responseAfterUpdate, err := c.GetResponse(ctx, 1)
+	if err != nil {
+		return fmt.Errorf("get response after update: %w", err)
+	}
+	fmt.Println(responseAfterUpdate)
+
+	deleteResponse, err := c.DeletePrompt(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("delete prompt index 0: %w", err)
+	}
+	fmt.Println(deleteResponse)
+
+	responseAfterDelete, err := c.GetResponse(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("get response after delete: %w", err)
+	}
+	fmt.Println(responseAfterDelete)
+
+	return nil
 }
