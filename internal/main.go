@@ -126,6 +126,7 @@ func (s *promptStore) handleCreate(w http.ResponseWriter, r *http.Request) {
 //     with HTTP 200 (the 400-gated path)
 //   - an actual OpenAI/API error surfaced via a synthetic "error" key with
 //     HTTP 500.
+//
 // Both shapes are preserved below.
 func (s *promptStore) handleGet(w http.ResponseWriter, r *http.Request) {
 	index, err := parsePromptIndex(r)
@@ -232,4 +233,10 @@ func buildRouter() http.Handler {
 	r.Put("/update/{prompt_index}", store.handleUpdate)
 
 	return r
+}
+
+// BuildRouter is an exported wrapper around buildRouter so that the
+// cmd/server entrypoint can wire the handler without duplicating logic.
+func BuildRouter() http.Handler {
+	return buildRouter()
 }
